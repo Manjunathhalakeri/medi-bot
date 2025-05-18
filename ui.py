@@ -48,7 +48,37 @@ def save_uploaded_file(uploaded_file, save_dir="data"):
 
 def main():
     st.set_page_config(page_title="Ask Chatbot!", layout="wide")
+    
+    st.markdown(
+        """
+        <style>
+        .stApp {background-color: #181825;}
+        .block-container {padding-top: 2rem;}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        """
+        <div style='padding: 1em; background-color: #232634; border-radius: 10px; margin-bottom: 1em;'>
+            <h2>🤖 <span style='color:#FF4B4B;'>Medi-Bot</span></h2>
+            <p>Upload your PDFs on the left. Ask anything and get answers with sources!</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
     st.title("🤖 Medi-Bot!")
+
+    st.markdown(
+        """
+        <div style='padding: 1em; background-color: #232634; border-radius: 10px; margin-bottom: 1em;'>
+            <h3>👋 Welcome to <span style='color:#FF4B4B;'>Medi-Bot</span>!</h3>
+            <p>Upload your medical PDFs on the left. Ask any question and get answers with sources!</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     # Only rebuild if the flag is set
     if st.session_state.get("rebuild_vectorstore", False):

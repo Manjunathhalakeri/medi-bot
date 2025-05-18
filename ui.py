@@ -2,23 +2,32 @@ import os
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 import streamlit as st
 
-from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.chains import RetrievalQA
-
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
-from langchain_huggingface import HuggingFaceEndpoint
+from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
+DB_FAISS_PATH = "vectorstore/db_faiss"
 
-DB_FAISS_PATH="vectorstore/db_faiss"
 @st.cache_resource
 def get_vectorstore():
     embedding_model = OpenAIEmbeddings()
     db = FAISS.load_local(DB_FAISS_PATH, embedding_model, allow_dangerous_deserialization=True)
     return db
 
+def rebuild_vectorstore(data_path="data", db_path=DB_FAISS_PATH):
+    loader = DirectoryLoader(data_path, glob="**/*.pdf", loader_cls=PyPDFLoader)
+    documents = loader.load()
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    text_chunks = text_splitter.split_documents(documents)
+    embedding_model = OpenAIEmbeddings()
+    db = FAISS.from_documents(text_chunks, embedding_model)
+    db.save_local(db_path)
+    return db
+
 def set_custom_prompt(custom_prompt_template):
-    prompt=PromptTemplate(template=custom_prompt_template, input_variables=["context", "question"])
+    prompt = PromptTemplate(template=custom_prompt_template, input_variables=["context", "question"])
     return prompt
 
 def load_llm():
@@ -29,23 +38,66 @@ def load_llm():
     )
     return llm
 
-
-
+def save_uploaded_file(uploaded_file, save_dir="data"):
+    if uploaded_file is not None:
+        save_path = os.path.join(save_dir, uploaded_file.name)
+        with open(save_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        return save_path
+    return None
 
 def main():
-    st.title("Ask Chatbot!")
+    st.set_page_config(page_title="Ask Chatbot!", layout="wide")
+    st.title("🤖 Medi-Bot!")
 
+    # Only rebuild if the flag is set
+    if st.session_state.get("rebuild_vectorstore", False):
+        with st.spinner("Updating knowledge base..."):
+            rebuild_vectorstore()
+            st.cache_resource.clear()
+        st.session_state.rebuild_vectorstore = False
+        st.success("Knowledge base updated! You can now search your new PDF.")
+
+    # Sidebar for upload and file display
+    with st.sidebar:
+        st.header("📚 Knowledge Base Manager")
+        uploaded_file = st.file_uploader("Upload a PDF to add to your knowledge base", type=["pdf"])
+        if uploaded_file is not None:
+            os.makedirs("data", exist_ok=True)
+            save_path = save_uploaded_file(uploaded_file, "data")
+            if save_path:
+                st.success(f"Uploaded and saved: {uploaded_file.name}")
+                st.session_state.rebuild_vectorstore = True  # Set flag
+
+        st.markdown("---")
+        st.subheader("Current files in your knowledge base:")
+        data_files = [f for f in os.listdir("data") if f.lower().endswith(".pdf")]
+        if data_files:
+            for file in data_files:
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    st.markdown(f"- {file}")
+                with col2:
+                    if st.button("🗑️", key=f"delete_{file}"):
+                        os.remove(os.path.join("data", file))
+                        st.success(f"Deleted: {file}")
+                        st.session_state.rebuild_vectorstore = True  # Set flag
+                        st.rerun()
+        else:
+            st.markdown("_No PDF files found in the data folder._")
+
+    # Main chat area
     if 'messages' not in st.session_state:
         st.session_state.messages = []
 
     for message in st.session_state.messages:
         st.chat_message(message['role']).markdown(message['content'])
 
-    prompt=st.chat_input("Pass your prompt here")
+    prompt = st.chat_input("Pass your prompt here")
 
     if prompt:
         st.chat_message('user').markdown(prompt)
-        st.session_state.messages.append({'role':'user', 'content': prompt})
+        st.session_state.messages.append({'role': 'user', 'content': prompt})
 
         CUSTOM_PROMPT_TEMPLATE = """
         Use the pieces of information provided in the context to answer user's question.
@@ -67,7 +119,7 @@ def main():
             qa_chain = RetrievalQA.from_chain_type(
                 llm=load_llm(),
                 chain_type="stuff",
-                retriever=vectorstore.as_retriever(search_kwargs={'k':3}),
+                retriever=vectorstore.as_retriever(search_kwargs={'k': 3}),
                 return_source_documents=True,
                 chain_type_kwargs={"prompt": set_custom_prompt(CUSTOM_PROMPT_TEMPLATE)}
             )
@@ -83,7 +135,6 @@ def main():
             if source_documents:
                 st.markdown("**Sources:**")
                 for i, doc in enumerate(source_documents, 1):
-                    # Show file name and page number if available
                     source_info = []
                     if "source" in doc.metadata:
                         source_info.append(f"File: `{doc.metadata['source']}`")
@@ -94,11 +145,10 @@ def main():
                 st.markdown("_No sources found._")
 
             # Save to chat history
-            st.session_state.messages.append({'role':'assistant', 'content': f"**Answer:**\n{result}"})
+            st.session_state.messages.append({'role': 'assistant', 'content': f"**Answer:**\n{result}"})
 
         except Exception as e:
             st.error(f"An error occurred: {e}")
-
 
 if __name__ == "__main__":
     main()

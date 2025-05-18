@@ -4,4 +4,3 @@ langchain-huggingface
 faiss-cpu
 pypdf
 streamlit
-HuggingFaceInferenceAPIEmbeddings

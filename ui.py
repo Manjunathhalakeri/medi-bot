@@ -58,16 +58,6 @@ def main():
         """,
         unsafe_allow_html=True
     )
-    st.markdown(
-        """
-        <div style='padding: 1em; background-color: #232634; border-radius: 10px; margin-bottom: 1em;'>
-            <h2>🤖 <span style='color:#FF4B4B;'>Medi-Bot</span></h2>
-            <p>Upload your PDFs on the left. Ask anything and get answers with sources!</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
     st.title("🤖 Medi-Bot!")
 
     st.markdown(
